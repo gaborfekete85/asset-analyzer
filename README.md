@@ -48,7 +48,7 @@ python -m venv .venv && source .venv/bin/activate
 pip install -e .
 
 cp .env.example .env
-# Fill in ANTHROPIC_API_KEY and TAVILY_API_KEY in .env
+# Fill in OPENAI_API_KEY, TAVILY_API_KEY, LANGSMITH_API_KEY in .env
 ```
 
 Tavily gives you 1,000 free searches/month — plenty for testing
@@ -124,14 +124,14 @@ Models use LangChain's `provider:model` convention via
 | `ANALYZER_SYNTHESIS_MODEL`    | `anthropic:claude-opus-4-7`      | Final synthesis               |
 | `ANALYZER_REPORTS_DIR`        | `reports`                        | Output directory              |
 
-### Run on OpenAI instead of Anthropic
+### Run on Anthropic instead of OpenAI
 
 ```bash
 unset ANTHROPIC_API_KEY      # not needed
 export OPENAI_API_KEY=sk-...
-export ANALYZER_DISCOVERY_MODEL=openai:gpt-4o-mini
-export ANALYZER_SUBAGENT_MODEL=openai:gpt-4o-mini
-export ANALYZER_SYNTHESIS_MODEL=openai:gpt-4o
+export ANALYZER_DISCOVERY_MODEL=anthropic:claude-sonnet-4-6
+export ANALYZER_SUBAGENT_MODEL=anthropic:claude-sonnet-4-6
+export ANALYZER_SYNTHESIS_MODEL=openai:anthropic:claude-opus-4-7
 
 python -m analyzer.main BTC
 ```
