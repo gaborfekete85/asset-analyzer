@@ -127,8 +127,8 @@ Models use LangChain's `provider:model` convention via
 ### Run on Anthropic instead of OpenAI
 
 ```bash
-unset ANTHROPIC_API_KEY      # not needed
-export OPENAI_API_KEY=sk-...
+unset OPENAI_API_KEY      # not needed
+export ANTHROPIC_API_KEY=sk-...
 export ANALYZER_DISCOVERY_MODEL=anthropic:claude-sonnet-4-6
 export ANALYZER_SUBAGENT_MODEL=anthropic:claude-sonnet-4-6
 export ANALYZER_SYNTHESIS_MODEL=openai:anthropic:claude-opus-4-7
