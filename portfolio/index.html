@@ -1,0 +1,706 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Asset Analyzer — Multi-Agent Crypto Research with LangGraph</title>
+  <meta name="description" content="A LangGraph supervisor + 5 parallel specialist sub-agents that produce a composite-scored crypto research report from a single ticker." />
+  <link rel="preconnect" href="https://cdn.jsdelivr.net" />
+  <style>
+    :root {
+      --bg: #0b0e14;
+      --bg-elev: #11151d;
+      --bg-card: #161b25;
+      --border: #232a36;
+      --fg: #e6e8ec;
+      --fg-dim: #9aa3b2;
+      --fg-muted: #6b7280;
+      --accent: #7c9cff;
+      --accent-2: #4ade80;
+      --warn: #f5a524;
+      --code-bg: #0f1218;
+      --max: 920px;
+    }
+
+    * { box-sizing: border-box; }
+
+    html, body {
+      margin: 0;
+      padding: 0;
+      background: var(--bg);
+      color: var(--fg);
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+      font-size: 16px;
+      line-height: 1.6;
+      -webkit-font-smoothing: antialiased;
+    }
+
+    a { color: var(--accent); text-decoration: none; }
+    a:hover { text-decoration: underline; }
+
+    code, pre {
+      font-family: "SFMono-Regular", Consolas, "Liberation Mono", Menlo, monospace;
+      font-size: 0.9em;
+    }
+
+    code {
+      background: var(--code-bg);
+      padding: 0.12em 0.4em;
+      border-radius: 4px;
+      border: 1px solid var(--border);
+      color: #d6dbe5;
+    }
+
+    pre {
+      background: var(--code-bg);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 14px 16px;
+      overflow-x: auto;
+      line-height: 1.5;
+    }
+    pre code { background: none; border: 0; padding: 0; }
+
+    /* ---------- Header ---------- */
+    header {
+      border-bottom: 1px solid var(--border);
+      background: linear-gradient(180deg, #0c1220 0%, #0b0e14 100%);
+    }
+    .header-inner {
+      max-width: var(--max);
+      margin: 0 auto;
+      padding: 28px 24px 18px;
+      display: grid;
+      grid-template-columns: 1fr auto;
+      align-items: center;
+      gap: 16px;
+    }
+    .brand {
+      font-weight: 700;
+      letter-spacing: 0.2px;
+      font-size: 1.05rem;
+    }
+    .brand .dot { color: var(--accent); }
+    .gh-link {
+      justify-self: end;
+      display: inline-flex;
+      align-items: center;
+      gap: 9px;
+      padding: 9px 18px;
+      border: 1.5px solid var(--accent);
+      border-radius: 999px;
+      color: var(--fg);
+      background: linear-gradient(180deg, #1a2238 0%, #131a2a 100%);
+      font-size: 0.95rem;
+      font-weight: 600;
+      letter-spacing: 0.2px;
+      box-shadow:
+        0 0 0 1px rgba(124, 156, 255, 0.18),
+        0 0 18px rgba(124, 156, 255, 0.28),
+        0 4px 14px rgba(0, 0, 0, 0.35);
+      transition: border-color .18s, background .18s, transform .18s, box-shadow .18s;
+      position: relative;
+    }
+    .gh-link::before {
+      content: "";
+      position: absolute;
+      inset: -3px;
+      border-radius: 999px;
+      background: radial-gradient(closest-side, rgba(124,156,255,0.35), rgba(124,156,255,0));
+      opacity: 0;
+      transition: opacity .25s;
+      z-index: -1;
+    }
+    .gh-link:hover {
+      border-color: #a8bcff;
+      background: linear-gradient(180deg, #21304f 0%, #18213a 100%);
+      text-decoration: none;
+      transform: translateY(-1px);
+      box-shadow:
+        0 0 0 1px rgba(124, 156, 255, 0.45),
+        0 0 28px rgba(124, 156, 255, 0.55),
+        0 6px 18px rgba(0, 0, 0, 0.4);
+    }
+    .gh-link:hover::before { opacity: 1; }
+    .gh-link svg { width: 18px; height: 18px; fill: currentColor; }
+
+    /* ---------- Hero / graph ---------- */
+    .hero {
+      max-width: var(--max);
+      margin: 0 auto;
+      padding: 36px 24px 8px;
+      text-align: center;
+    }
+    .hero h1 {
+      margin: 0 0 10px;
+      font-size: 2rem;
+      letter-spacing: -0.02em;
+    }
+    .hero p.lede {
+      color: var(--fg-dim);
+      max-width: 640px;
+      margin: 0 auto 28px;
+      font-size: 1.05rem;
+    }
+    .graph-wrap {
+      background: #0d1018;
+      border: 1px solid var(--border);
+      border-radius: 14px;
+      padding: 20px;
+      margin: 0 auto;
+    }
+    .graph-wrap img {
+      display: block;
+      max-width: 100%;
+      height: auto;
+      margin: 0 auto;
+      /* Original PNG is white-on-light. Invert + hue-rotate flips it to
+         a dark-on-dark palette while preserving accent hues. */
+      filter:
+        invert(0.92)
+        hue-rotate(180deg)
+        saturate(0.85)
+        brightness(0.95)
+        contrast(1.05)
+        drop-shadow(0 6px 24px rgba(0,0,0,0.55));
+      background: #0d1018;
+      border-radius: 8px;
+    }
+    .graph-caption {
+      margin-top: 14px;
+      color: var(--fg-muted);
+      font-size: 0.88rem;
+      font-style: italic;
+    }
+
+    /* ---------- Sections ---------- */
+    main { max-width: var(--max); margin: 0 auto; padding: 24px; }
+    section { margin: 56px 0; }
+    section h2 {
+      font-size: 1.4rem;
+      letter-spacing: -0.01em;
+      margin: 0 0 14px;
+      padding-bottom: 8px;
+      border-bottom: 1px solid var(--border);
+    }
+    section p { color: #d6dbe5; }
+    section ul { padding-left: 22px; }
+    section li { margin: 4px 0; color: #d6dbe5; }
+    section li code { font-size: 0.88em; }
+
+    .grid-2 {
+      display: grid;
+      grid-template-columns: repeat(2, 1fr);
+      gap: 18px;
+      margin-top: 16px;
+    }
+    .card {
+      background: var(--bg-card);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 18px 20px;
+    }
+    .card h3 {
+      margin: 0 0 6px;
+      font-size: 1rem;
+      color: var(--accent);
+    }
+    .card p { margin: 4px 0 0; color: var(--fg-dim); font-size: 0.95rem; }
+
+    /* ---------- Note / callout ---------- */
+    .callout {
+      display: flex;
+      gap: 14px;
+      padding: 16px 18px;
+      border-radius: 10px;
+      background: #1e1a10;
+      border: 1px solid #3a2f12;
+      color: #f1d99a;
+    }
+    .callout-icon {
+      flex: 0 0 auto;
+      width: 22px;
+      height: 22px;
+      border-radius: 50%;
+      background: var(--warn);
+      color: #1e1a10;
+      display: grid;
+      place-items: center;
+      font-weight: 800;
+      font-size: 0.85rem;
+    }
+    .callout strong { color: #fff5d6; }
+
+    /* ---------- Sample report (rendered markdown) ---------- */
+    .report-frame {
+      background: var(--bg-card);
+      border: 1px solid var(--border);
+      border-radius: 14px;
+      padding: 8px 28px 28px;
+      margin-top: 18px;
+      overflow: hidden;
+    }
+    .report-frame .report-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin: 4px 0 14px;
+      padding: 10px 0 12px;
+      border-bottom: 1px dashed var(--border);
+      color: var(--fg-muted);
+      font-size: 0.82rem;
+    }
+    .report-frame .pill {
+      background: var(--bg-elev);
+      border: 1px solid var(--border);
+      border-radius: 999px;
+      padding: 4px 10px;
+      color: var(--fg-dim);
+      font-family: "SFMono-Regular", monospace;
+      font-size: 0.78rem;
+    }
+
+    /* Markdown rendered styles inside .md */
+    .md h1 { font-size: 1.7rem; margin: 18px 0 10px; letter-spacing: -0.01em; }
+    .md h2 { font-size: 1.25rem; margin: 28px 0 8px; padding-bottom: 6px; border-bottom: 1px solid var(--border); }
+    .md h3 { font-size: 1.05rem; margin: 22px 0 6px; color: var(--accent); }
+    .md h4 { font-size: 0.98rem; margin: 18px 0 4px; color: var(--accent-2); }
+    .md p, .md li { color: #d6dbe5; }
+    .md ul { padding-left: 22px; }
+    .md blockquote {
+      border-left: 3px solid var(--warn);
+      margin: 14px 0;
+      padding: 6px 14px;
+      background: #1d1a12;
+      color: #f1d99a;
+      border-radius: 0 6px 6px 0;
+    }
+    .md hr {
+      border: 0;
+      border-top: 1px solid var(--border);
+      margin: 22px 0;
+    }
+    .md table {
+      border-collapse: collapse;
+      width: 100%;
+      margin: 12px 0;
+      display: block;
+      overflow-x: auto;
+    }
+    .md th, .md td {
+      border: 1px solid var(--border);
+      padding: 7px 10px;
+      text-align: left;
+      font-size: 0.92rem;
+    }
+    .md th {
+      background: #1a2030;
+      color: var(--fg);
+      font-weight: 600;
+    }
+    .md td { color: var(--fg-dim); }
+    .md code { font-size: 0.85em; }
+    .md em { color: var(--fg-muted); }
+
+    /* ---------- Footer ---------- */
+    footer {
+      border-top: 1px solid var(--border);
+      margin-top: 60px;
+      padding: 28px 24px;
+      text-align: center;
+      color: var(--fg-muted);
+      font-size: 0.92rem;
+      background: #0a0d12;
+    }
+    footer a { color: var(--accent); }
+
+    /* ---------- Mobile ---------- */
+    @media (max-width: 720px) {
+      .header-inner { grid-template-columns: 1fr; text-align: center; }
+      .gh-link { justify-self: center; }
+      .grid-2 { grid-template-columns: 1fr; }
+      .hero h1 { font-size: 1.55rem; }
+    }
+  </style>
+</head>
+<body>
+
+  <!-- ===================== HEADER ===================== -->
+  <header>
+    <div class="header-inner">
+      <div class="brand">Langgraph - asset-analyzer<span class="dot">.</span></div>
+
+      <a class="gh-link" href="https://github.com/gaborfekete85/asset-analyzer" target="_blank" rel="noopener">
+        <svg viewBox="0 0 16 16" aria-hidden="true">
+          <path d="M8 0C3.58 0 0 3.58 0 8a8 8 0 0 0 5.47 7.59c.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.013 8.013 0 0 0 16 8c0-4.42-3.58-8-8-8z"/>
+        </svg>
+        Github
+      </a>
+    </div>
+  </header>
+
+  <!-- ===================== HERO ===================== -->
+  <div class="hero">
+    <h1>Multi-Agent Crypto Research with LangGraph</h1>
+    <p class="lede">
+      A supervisor agent orchestrates five specialist sub-agents in parallel — each
+      a self-contained LangGraph node with its own skill prompt — and a synthesizer
+      joins their reports into a single composite-scored markdown deliverable.
+    </p>
+
+    <div class="graph-wrap">
+      <img src="graph.png" alt="LangGraph topology: discovery node fans out to five parallel sub-agents (onchain, tokenomics, sentiment, technical, fundamental) which all converge into a synthesize node." />
+      <div class="graph-caption">Compiled LangGraph topology, rendered via <code>graph.get_graph().draw_mermaid_png()</code>.</div>
+    </div>
+  </div>
+
+  <main>
+
+    <!-- ===================== ABOUT ===================== -->
+    <section>
+      <h2>What this is</h2>
+      <p>
+        <strong>asset-analyzer</strong> takes a single cryptocurrency ticker —
+        <code>BTC</code>, <code>ETH</code>, <code>SOL</code>, anything CoinGecko knows —
+        and produces a deeply-researched markdown report scored 0–100 across five
+        independent dimensions. Each dimension is owned by a dedicated sub-agent
+        with its own focused skill prompt, search budget, and scoring rubric.
+      </p>
+      <p>
+        The five specialists are <strong>On-Chain Analytics</strong>,
+        <strong>Tokenomics</strong>, <strong>Sentiment &amp; Momentum</strong>,
+        <strong>Technical Analysis</strong>, and <strong>Fundamental Analysis</strong>.
+        They run concurrently, then a synthesis step weighs their findings,
+        flags cross-dimensional convergence and divergence, and writes the
+        final composite report.
+      </p>
+
+      <div class="grid-2">
+        <div class="card">
+          <h3>Skills as source of truth</h3>
+          <p>
+            Each sub-agent's behaviour comes from a single
+            <code>SKILL.md</code> file loaded verbatim as its system prompt.
+            Tweak the markdown, re-run, behaviour changes — no code edit needed.
+          </p>
+        </div>
+        <div class="card">
+          <h3>Provider-agnostic LLMs</h3>
+          <p>
+            Built on LangChain's <code>init_chat_model</code> so the same graph
+            runs on Anthropic, OpenAI, Google, or local Ollama models — picked
+            per role via env vars.
+          </p>
+        </div>
+        <div class="card">
+          <h3>Parallel by construction</h3>
+          <p>
+            Five sibling edges from <code>discovery</code> to the sub-agents
+            place all five in the same Pregel superstep. They actually run
+            concurrently, not in a loop.
+          </p>
+        </div>
+        <div class="card">
+          <h3>Composable scoring</h3>
+          <p>
+            Each sub-agent emits a 0–100 score with five 0–20 sub-dimensions.
+            The synthesizer combines them into a single composite score with
+            an A+/A/B/C/D/F grade and a Buy/Hold/Avoid signal.
+          </p>
+        </div>
+      </div>
+    </section>
+
+    <!-- ===================== WHAT IS LANGGRAPH ===================== -->
+    <section>
+      <h2>What does LangGraph do here?</h2>
+      <p>
+        <a href="https://langchain-ai.github.io/langgraph/" target="_blank" rel="noopener">LangGraph</a>
+        is a graph-based orchestration framework on top of LangChain. You declare
+        nodes (units of work — usually an LLM call, a tool call, or a small
+        Python function) and edges (how state flows between them). The runtime
+        is a Pregel-style scheduler: in each "superstep" every currently-runnable
+        node executes in parallel, then the scheduler advances.
+      </p>
+      <p>
+        For this project that gives us three things essentially for free:
+      </p>
+      <ul>
+        <li><strong>Parallel fan-out / fan-in.</strong> Five edges from
+          <code>discovery</code> to the sub-agents and five edges back into
+          <code>synthesize</code> are all the wiring needed to run the
+          specialists concurrently and join their results.</li>
+        <li><strong>Structured shared state.</strong> A typed
+          <code>AnalyzerState</code> dictionary flows through the graph. Each
+          node writes to its own key, so concurrent writes never collide.</li>
+        <li><strong>Subagents as react loops.</strong> Each sub-agent is a
+          <code>create_react_agent</code> — an LLM that can call the Tavily
+          search tool until it has enough evidence, then emits the final
+          markdown report. The supervisor doesn't care what happens inside.</li>
+      </ul>
+      <p>
+        The mapping from the original Claude-Code skill design is essentially
+        one-to-one: orchestrator → supervisor graph, sub-agents → subgraph nodes,
+        skill markdown → system prompts.
+      </p>
+    </section>
+
+    <!-- ===================== NOTE ===================== -->
+    <section>
+      <div class="callout">
+        <div class="callout-icon">i</div>
+        <div>
+          <strong>No live demo.</strong> This page intentionally doesn't expose a hosted
+          endpoint — a single end-to-end run hits external LLM and search APIs that
+          carry real per-request cost, and a public button would be expensive to
+          keep open. Clone the repo, point it at your own API keys, and run it
+          locally — a full analysis takes 2–4 minutes and finishes for cents on
+          the cheap-OpenAI preset.
+        </div>
+      </div>
+    </section>
+
+    <!-- ===================== SAMPLE REPORT ===================== -->
+    <section>
+      <h2>Sample output — Solana (SOL)</h2>
+      <p>
+        The report below is the actual unmodified output of one run of the pipeline.
+        Source: <code>reports/CRYPTO-ANALYSIS-SOL.md</code>.
+      </p>
+
+      <div class="report-frame">
+        <div class="report-header">
+          <span>CRYPTO-ANALYSIS-SOL.md</span>
+          <span class="pill">generated by asset-analyzer</span>
+        </div>
+        <div id="sample-report" class="md"><em>Loading sample report…</em></div>
+      </div>
+    </section>
+
+  </main>
+
+  <!-- ===================== FOOTER ===================== -->
+  <footer>
+    Made by <a href="https://feketegabor.com" target="_blank" rel="noopener">Fekete Gabor</a> &nbsp;·&nbsp;
+    <a href="https://github.com/gaborfekete85/asset-analyzer" target="_blank" rel="noopener">github.com/gaborfekete85/asset-analyzer</a>
+  </footer>
+
+  <!-- Embedded markdown of the sample report (kept in HTML so the page works
+       from file:// without needing a server). To refresh, paste the new
+       contents of reports/CRYPTO-ANALYSIS-SOL.md into the <script> below. -->
+  <script id="sample-report-md" type="text/markdown">
+# Solana (SOL) — Full Crypto Analysis
+
+**Generated:** 2023-10-31 15:00 UTC  
+**Analyst:** AI Crypto Analyst v1.0  
+**Signal:** [HOLD] Hold / Accumulate | **Grade:** B | **Crypto Score:** 70/100
+
+> DISCLAIMER: For educational/research purposes only. Not financial advice. Cryptocurrency is highly volatile. Always DYOR.
+
+---
+
+## Executive Summary
+
+Solana (SOL) achieves a composite score of 70/100, signaling a 'Hold / Accumulate' position. The strongest dimension is Fundamental Strength, with a score of 81, driven by robust adoption metrics and a strong competitive moat. However, Tokenomics raised concerns with upcoming unlock risks, scoring a 64. Solana exhibits healthy growth in on-chain activity but faces mixed technical and sentiment indicators, suggesting caution before committing to increased exposure. The most crucial takeaway for investors is to monitor the evolving regulatory environment, as it could significantly impact Solana's future positioning.
+
+---
+
+## Token Profile
+
+| Metric | Value |
+|--------|-------|
+| Token | Solana (SOL) |
+| Price | Price data unavailable |
+| Market Cap | Market data unavailable |
+| FDV | Market data unavailable |
+| Mcap/FDV Ratio | Market data unavailable |
+| 24h Volume | Market data unavailable |
+| Volume/Mcap Ratio | Market data unavailable |
+| 24h Change | Market data unavailable |
+| 7d Change | Market data unavailable |
+| 30d Change | Market data unavailable |
+| 90d Change | Market data unavailable |
+| Circulating Supply | 445 million (unknown%) |
+| Max Supply | Unlimited |
+| Chain | Solana |
+| Category | Layer 1 |
+| CoinGecko Rank | #4 or #5 |
+
+---
+
+## Crypto Score Dashboard
+
+### Composite Score: 70/100 — B — [HOLD]
+
+| Dimension | Score | Grade | Key Finding |
+|-----------|-------|-------|-------------|
+| On-Chain Health | 75/100 | A | High transaction volumes and active addresses, though with mixed whale behavior. |
+| Tokenomics Quality | 64/100 | B | Upcoming unlock risks and limited value accrual beyond governance. |
+| Sentiment & Momentum | 67/100 | B | Positive community engagement and narratives, yet dampened by market-wide fear. |
+| Technical Setup | 62/100 | B | Mixed indicators, with a neutral trend and weak momentum. |
+| Fundamental Strength | 81/100 | A | Strong project viability and adoption metrics; risks include previous network instability. |
+
+### Sub-Dimension Breakdown
+
+#### On-Chain Health (75/100)
+| Sub-Dimension | Score |
+|---------------|-------|
+| Network Activity | 16/20 |
+| Whale Behavior | 12/20 |
+| Exchange Flows | 13/20 |
+| Holder Distribution | 16/20 |
+| Growth Metrics | 18/20 |
+
+#### Tokenomics Quality (64/100)
+| Sub-Dimension | Score |
+|---------------|-------|
+| Supply Health | 14/20 |
+| Unlock Risk | 12/20 |
+| Staking Economics | 12/20 |
+| Distribution Fairness | 16/20 |
+| Utility Design | 10/20 |
+
+#### Sentiment & Momentum (67/100)
+| Sub-Dimension | Score |
+|---------------|-------|
+| Social Buzz | 15/20 |
+| News Tone | 13/20 |
+| Community Health | 14/20 |
+| Developer Activity | 10/20 |
+| Narrative Momentum | 15/20 |
+
+#### Technical Setup (62/100)
+| Sub-Dimension | Score |
+|---------------|-------|
+| Trend Strength | 12/20 |
+| Momentum | 14/20 |
+| Volume Profile | 10/20 |
+| Pattern Quality | 12/20 |
+| Key Levels | 14/20 |
+
+#### Fundamental Strength (81/100)
+| Sub-Dimension | Score |
+|---------------|-------|
+| Project Viability | 15/20 |
+| Team & Backers | 16/20 |
+| Adoption Metrics | 17/20 |
+| Competitive Moat | 16/20 |
+| Revenue & Economics | 17/20 |
+
+---
+
+## On-Chain Overview
+
+Solana's on-chain data showcases robust growth with high transaction volumes and active address counts, reflecting significant adoption in its DeFi sector. Despite its positive trajectory, mixed whale behavior and sporadic exchange outflows hint at possible caution from large investors. Solana's network continues to attract institutional attention, though recent ETF stagnation and geopolitical effects bear watching.
+
+---
+
+## Tokenomics Overview
+
+Solana's tokenomics highlight a system with moderate inflation and an upcoming unlock schedule that represents a potential risk. The lack of a hard cap could contribute to future selling pressure as additional tokens enter circulation. The staking economy is fairly healthy, although there's significant validator concentration. While token utility is somewhat lacking, it's primarily a governance instrument with room for improvement in value capture.
+
+---
+
+## Sentiment Analysis
+
+Community sentiment around Solana remains upbeat with high engagement levels, particularly in DeFi developments and strategic partnerships. However, broader market conditions reflect high fear levels, dampening enthusiasm somewhat. Upcoming projects and institutional interests could enhance narrative momentum, positioning Solana for potential gains should market conditions improve.
+
+---
+
+## Technical Analysis
+
+Solana's technical indicators reveal mixed to neutral signals across multiple timeframes. While its price hovers near critical support levels, low momentum and potential bearish sentiment are prominent. Importantly, a potential ascending triangle suggests a cautious bullish outlook if key resistance levels are breached.
+
+---
+
+## Fundamental Analysis
+
+Solana stands out for its architectural innovations and significant growth in user metrics, making it a leading Layer 1 blockchain. Strong partnerships and ecosystem development fortify its market position, though it faces challenges from network reliability issues and competitive pressures. Its utility-driven design, combined with ongoing adoption and a proactive governance model, supports long-term viability.
+
+---
+
+## Bull Case
+
+**Target:** $100.00 (Potential upside with improved sentiment)
+**Probability:** 50%
+**Timeframe:** 6-12 months
+
+- Scaling improvements and performance upgrades boosting network capacity.
+- Increased institutional participation catalyzing demand for SOL.
+- Enhanced adoption due to strategic partnerships in payments and DeFi.
+
+---
+
+## Bear Case
+
+**Target:** $70.00 (Potential downside if regulatory issues arise)
+**Probability:** 20%
+**Timeframe:** 3-6 months
+
+- Exacerbated by regulatory scrutiny potentially leading to market restrictions.
+- Network outages could dampen confidence and drive users to competitors.
+- Macro market conditions enforcing broader crypto asset depreciation.
+
+---
+
+## Key Levels
+
+| Level Type | Price | Significance |
+|------------|-------|--------------|
+| Strong Resistance | $90.00 | Difficulty breaking past consolidative pressure |
+| Resistance | $92.00 | Testing major moving averages |
+| Current Price | Price data unavailable | — |
+| Support | $86.00 | Reflective of current volume profile support |
+| Strong Support | $84.00 | Historically supportive level for reaccumulation |
+| Invalidation | $80.00 | Below this, downside continuation is favored |
+
+---
+
+## Risk Factors
+
+| Risk | Severity | Probability | Impact |
+|------|----------|-------------|--------|
+| Regulatory Action | High | 35% | Potential classification as security |
+| Network Reliability | Medium | 40% | Impacts user confidence and transaction reliability |
+| Competitive Pressure | Medium | 50% | Loss of market share to other Layer 1s |
+| Token Unlock Volatility | Medium | 45% | Market reaction to supply increase |
+| Macroeconomic Conditions | High | 65% | Broader economic downturn affecting sentiment |
+
+---
+
+## Cross-Dimensional Signals
+
+### Convergence (High Confidence)
+- **On-chain growth** and **strong fundamentals** support long-term valuation.
+- **Narrative momentum** aligns with positive **social buzz** and **community activity**.
+
+### Divergence (Watch Closely)
+- **Regulatory uncertainty** conflicts with **adoption metrics** suggesting market potential.
+- **Mixed technical signals** amidst **fundamental strength** indicate timing challenges.
+
+---
+
+## Verdict
+
+**SOL scores 70/100 (B) with a Hold/Accumulate signal.**
+
+Current levels recommend patience, as regulatory risks and upcoming unlocks introduce potential volatility. A consolidation or price weakness could offer strategic entry points. Investors should stay informed about regulatory developments and Solana's technological upgrades — both will critically impact its medium- to long-term trajectory.
+
+---
+
+*DISCLAIMER: For educational/research purposes only. Not financial advice. Cryptocurrency is highly volatile and speculative. Past performance does not indicate future results. Always DYOR and consult a licensed financial advisor before making investment decisions.*
+
+*Data sourced from public APIs, on-chain explorers, social platforms, and news aggregators. Scores are AI-generated estimates and may contain inaccuracies. Verify all data independently.*
+  </script>
+
+  <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+  <script>
+    (function () {
+      const src = document.getElementById('sample-report-md').textContent.trim();
+      const html = marked.parse(src, { gfm: true, breaks: false });
+      document.getElementById('sample-report').innerHTML = html;
+    })();
+  </script>
+
+</body>
+</html>
